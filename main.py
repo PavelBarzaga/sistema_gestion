@@ -63,7 +63,7 @@ class MainWindow:
             ("Configuraciones", None, True, True),  # Este abre submenú
             ("Productos", "productos.py", True, False),
             ("Compras", "compras.py", True, False),
-            ("Ventas", None, False, False),
+            ("Ventas", "ventas.py", True, False),
             ("Reportes", None, False, False),
         ]
 

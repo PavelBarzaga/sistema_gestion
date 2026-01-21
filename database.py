@@ -7,6 +7,7 @@ from pathlib import Path
 from datetime import datetime, date
 from enum import Enum
 from typing import List, Optional, Tuple
+from dataclasses import dataclass
 
 
 class Database:
@@ -91,6 +92,20 @@ class Database:
                 )
             """
             )
+            # Tabla de ventas
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ventas (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    semana_id INTEGER NOT NULL,
+                    producto_id INTEGER NOT NULL,
+                    cantidad_vendida INTEGER NOT NULL,
+                    monto REAL NOT NULL,
+                    FOREIGN KEY (semana_id) REFERENCES semanas(id) ON DELETE CASCADE,
+                    FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE
+                )
+            """
+            )
 
             # Crear índices para mejorar el rendimiento
             cursor.execute(
@@ -111,6 +126,15 @@ class Database:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_costos_tipo ON costos(tipo)")
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_costos_nombre ON costos(nombre)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_ventas_semana ON ventas(semana_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_ventas_producto ON ventas(producto_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_ventas_fecha_producto ON ventas(semana_id, producto_id)"
             )
 
             conn.commit()
@@ -1031,6 +1055,391 @@ class Costo:
 
     def __str__(self) -> str:
         return f"Costo(id={self.id}, nombre='{self.nombre}', cantidad={self.cantidad}, tipo={self.tipo.value})"
+
+
+@dataclass
+class Venta:
+    """Modelo para la tabla Ventas"""
+
+    id: int = None
+    semana_id: int = None
+    producto_id: int = None
+    cantidad_vendida: int = 0
+    monto: float = 0.0
+
+    @property
+    def semana(self):
+        """Obtiene el objeto Semana asociado"""
+        return Semana.get_by_id(self.semana_id) if self.semana_id else None
+
+    @property
+    def producto(self):
+        """Obtiene el objeto Producto asociado"""
+        return Producto.get_by_id(self.producto_id) if self.producto_id else None
+
+    @staticmethod
+    def get_all() -> List["Venta"]:
+        """Obtiene todas las ventas ordenadas por semana y producto"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, semana_id, producto_id, cantidad_vendida, monto 
+                    FROM ventas 
+                    ORDER BY semana_id DESC, producto_id
+                """
+                )
+                rows = cursor.fetchall()
+                return [
+                    Venta(
+                        id=row[0],
+                        semana_id=row[1],
+                        producto_id=row[2],
+                        cantidad_vendida=row[3],
+                        monto=row[4],
+                    )
+                    for row in rows
+                ]
+        except Exception as e:
+            print(f"Error en get_all: {e}")
+            return []
+
+    @staticmethod
+    def get_by_semana(semana_id: int) -> List["Venta"]:
+        """Obtiene todas las ventas de una semana específica"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, semana_id, producto_id, cantidad_vendida, monto 
+                    FROM ventas 
+                    WHERE semana_id = ?
+                    ORDER BY producto_id
+                """,
+                    (semana_id,),
+                )
+                rows = cursor.fetchall()
+                return [
+                    Venta(
+                        id=row[0],
+                        semana_id=row[1],
+                        producto_id=row[2],
+                        cantidad_vendida=row[3],
+                        monto=row[4],
+                    )
+                    for row in rows
+                ]
+        except Exception as e:
+            print(f"Error en get_by_semana: {e}")
+            return []
+
+    @staticmethod
+    def get_by_producto(producto_id: int) -> List["Venta"]:
+        """Obtiene todas las ventas de un producto específico"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, semana_id, producto_id, cantidad_vendida, monto 
+                    FROM ventas 
+                    WHERE producto_id = ?
+                    ORDER BY semana_id DESC
+                """,
+                    (producto_id,),
+                )
+                rows = cursor.fetchall()
+                return [
+                    Venta(
+                        id=row[0],
+                        semana_id=row[1],
+                        producto_id=row[2],
+                        cantidad_vendida=row[3],
+                        monto=row[4],
+                    )
+                    for row in rows
+                ]
+        except Exception as e:
+            print(f"Error en get_by_producto: {e}")
+            return []
+
+    @staticmethod
+    def get_by_id(venta_id: int) -> Optional["Venta"]:
+        """Obtiene una venta por su ID"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, semana_id, producto_id, cantidad_vendida, monto 
+                    FROM ventas WHERE id = ?
+                """,
+                    (venta_id,),
+                )
+                row = cursor.fetchone()
+                if row:
+                    return Venta(
+                        id=row[0],
+                        semana_id=row[1],
+                        producto_id=row[2],
+                        cantidad_vendida=row[3],
+                        monto=row[4],
+                    )
+                return None
+        except Exception as e:
+            print(f"Error en get_by_id: {e}")
+            return None
+
+    @staticmethod
+    def get_total_monto_semana(semana_id: int) -> float:
+        """Obtiene el monto total de ventas de una semana"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT SUM(monto) 
+                    FROM ventas 
+                    WHERE semana_id = ?
+                """,
+                    (semana_id,),
+                )
+                result = cursor.fetchone()
+                return result[0] if result[0] is not None else 0.0
+        except Exception as e:
+            print(f"Error en get_total_monto_semana: {e}")
+            return 0.0
+
+    @staticmethod
+    def get_total_cantidad_producto(producto_id: int) -> int:
+        """Obtiene la cantidad total vendida de un producto"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT SUM(cantidad_vendida) 
+                    FROM ventas 
+                    WHERE producto_id = ?
+                """,
+                    (producto_id,),
+                )
+                result = cursor.fetchone()
+                return result[0] if result[0] is not None else 0
+        except Exception as e:
+            print(f"Error en get_total_cantidad_producto: {e}")
+            return 0
+
+    def _actualizar_inventario(
+        self, operacion: str, cantidad_anterior: int = 0, conn=None
+    ):
+        """Actualiza el inventario del producto después de una operación"""
+        try:
+            # Usar conexión proporcionada o crear una nueva
+            close_conn = False
+            if conn is None:
+                conn = Database().get_connection()
+                close_conn = True
+
+            cursor = conn.cursor()
+
+            # Obtener producto con la misma conexión
+            cursor.execute(
+                """
+                SELECT id, nombre, categoria_id, costo, precio_venta, cantidad, margen_bruto
+                FROM productos WHERE id = ?
+            """,
+                (self.producto_id,),
+            )
+            row = cursor.fetchone()
+
+            if not row:
+                raise Exception("Producto no encontrado")
+
+            # Crear objeto Producto
+            producto = Producto(
+                nombre=row[1],
+                categoria_id=row[2],
+                costo=row[3],
+                precio_venta=row[4],
+                cantidad=row[5],
+                id=row[0],
+            )
+
+            if operacion == "crear":
+                # Restar cantidad vendida del inventario
+                if producto.cantidad < self.cantidad_vendida:
+                    raise Exception(
+                        f"Inventario insuficiente. Solo hay {producto.cantidad} unidades disponibles"
+                    )
+                producto.cantidad -= self.cantidad_vendida
+
+            elif operacion == "actualizar":
+                # Calcular diferencia
+                diferencia = self.cantidad_vendida - cantidad_anterior
+
+                # Si la nueva cantidad es mayor, verificar inventario
+                if diferencia > 0 and producto.cantidad < diferencia:
+                    raise Exception(
+                        f"Inventario insuficiente para actualizar. Solo hay {producto.cantidad} unidades disponibles"
+                    )
+
+                # Ajustar inventario
+                producto.cantidad -= diferencia
+
+            elif operacion == "eliminar":
+                # Devolver cantidad al inventario
+                producto.cantidad += self.cantidad_vendida
+
+            # Actualizar producto en la misma conexión
+            producto.margen_bruto = producto.precio_venta - producto.costo
+            cursor.execute(
+                """
+                UPDATE productos 
+                SET cantidad = ?, margen_bruto = ?
+                WHERE id = ?
+            """,
+                (producto.cantidad, producto.margen_bruto, producto.id),
+            )
+
+            if close_conn:
+                conn.commit()
+                conn.close()
+
+        except Exception as e:
+            if conn and close_conn:
+                conn.close()
+            raise Exception(f"Error al actualizar inventario: {str(e)}")
+
+    def save(self, es_actualizacion: bool = False, cantidad_anterior: int = 0) -> bool:
+        """Guarda la venta en la base de datos y actualiza el inventario"""
+        conn = None
+        try:
+            # Validaciones básicas
+            if not self.semana_id:
+                raise Exception("Debe seleccionar una semana")
+
+            if not self.producto_id:
+                raise Exception("Debe seleccionar un producto")
+
+            if self.cantidad_vendida <= 0:
+                raise Exception("La cantidad vendida debe ser mayor a 0")
+
+            if self.monto <= 0:
+                raise Exception("El monto debe ser mayor a 0")
+
+            # Usar UNA sola conexión para toda la operación
+            conn = Database().get_connection()
+            cursor = conn.cursor()
+
+            # Iniciar transacción
+            conn.execute("BEGIN TRANSACTION")
+
+            if self.id:  # Actualizar
+                # Primero actualizar inventario
+                self._actualizar_inventario("actualizar", cantidad_anterior, conn)
+
+                # Luego actualizar venta
+                cursor.execute(
+                    """
+                    UPDATE ventas 
+                    SET semana_id = ?, producto_id = ?, cantidad_vendida = ?, monto = ?
+                    WHERE id = ?
+                """,
+                    (
+                        self.semana_id,
+                        self.producto_id,
+                        self.cantidad_vendida,
+                        self.monto,
+                        self.id,
+                    ),
+                )
+
+            else:  # Insertar
+                # Primero verificar inventario
+                cursor.execute(
+                    "SELECT cantidad FROM productos WHERE id = ?", (self.producto_id,)
+                )
+                row = cursor.fetchone()
+                if not row:
+                    raise Exception("Producto no encontrado")
+
+                inventario_actual = row[0]
+                if inventario_actual < self.cantidad_vendida:
+                    raise Exception(
+                        f"Inventario insuficiente. Solo hay {inventario_actual} unidades disponibles"
+                    )
+
+                # Insertar venta
+                cursor.execute(
+                    """
+                    INSERT INTO ventas (semana_id, producto_id, cantidad_vendida, monto) 
+                    VALUES (?, ?, ?, ?)
+                """,
+                    (
+                        self.semana_id,
+                        self.producto_id,
+                        self.cantidad_vendida,
+                        self.monto,
+                    ),
+                )
+                self.id = cursor.lastrowid
+
+                # Luego actualizar inventario
+                self._actualizar_inventario("crear", 0, conn)
+
+            # Commit de la transacción
+            conn.commit()
+            return True
+
+        except Exception as e:
+            # Rollback en caso de error
+            if conn:
+                conn.rollback()
+            raise Exception(f"Error al guardar venta: {str(e)}")
+        finally:
+            # Siempre cerrar la conexión
+            if conn:
+                conn.close()
+
+    def delete(self) -> bool:
+        """Elimina la venta de la base de datos y devuelve el inventario"""
+        conn = None
+        try:
+            # Usar UNA sola conexión
+            conn = Database().get_connection()
+            cursor = conn.cursor()
+
+            # Iniciar transacción
+            conn.execute("BEGIN TRANSACTION")
+
+            # Primero devolver inventario
+            self._actualizar_inventario("eliminar", 0, conn)
+
+            # Luego eliminar la venta
+            cursor.execute("DELETE FROM ventas WHERE id = ?", (self.id,))
+
+            # Commit de la transacción
+            conn.commit()
+            return True
+        except Exception as e:
+            # Rollback en caso de error
+            if conn:
+                conn.rollback()
+            raise Exception(f"Error al eliminar venta: {str(e)}")
+        finally:
+            # Siempre cerrar la conexión
+            if conn:
+                conn.close()
+
+    def __str__(self) -> str:
+        semana_info = (
+            self.semana.fecha_inicio.strftime("%d/%m/%Y") if self.semana else "N/A"
+        )
+        producto_info = self.producto.nombre if self.producto else "N/A"
+        return f"Venta(id={self.id}, semana={semana_info}, producto='{producto_info}', cantidad={self.cantidad_vendida}, monto={self.monto})"
 
 
 # Instancia global de la base de datos
