@@ -5,6 +5,7 @@ Configuración de la base de datos y modelos de la aplicación
 import sqlite3
 from pathlib import Path
 from datetime import datetime, date
+from enum import Enum
 from typing import List, Optional, Tuple
 
 
@@ -79,6 +80,17 @@ class Database:
                 )
             """
             )
+            # Tabla de costos
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS costos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre TEXT NOT NULL,
+                    cantidad REAL NOT NULL,
+                    tipo TEXT NOT NULL CHECK (tipo IN ('fijo', 'variable'))
+                )
+            """
+            )
 
             # Crear índices para mejorar el rendimiento
             cursor.execute(
@@ -95,6 +107,10 @@ class Database:
             )
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_semanas_fin ON semanas(fecha_fin)"
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_costos_tipo ON costos(tipo)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_costos_nombre ON costos(nombre)"
             )
 
             conn.commit()
@@ -832,6 +848,189 @@ class Semana:
 
     def __str__(self) -> str:
         return f"Semana(id={self.id}, inicio={self.fecha_inicio}, fin={self.fecha_fin}, num={self.numero})"
+
+
+class TipoCosto(Enum):
+    """Enum para los tipos de costo"""
+
+    FIJO = "fijo"
+    VARIABLE = "variable"
+
+
+class Costo:
+    """Modelo para la tabla Costos"""
+
+    def __init__(self, nombre: str, cantidad: float, tipo: TipoCosto, id: int = None):
+        self.id = id
+        self.nombre = nombre
+        self.cantidad = cantidad
+        self.tipo = tipo
+
+    @staticmethod
+    def get_all() -> List["Costo"]:
+        """Obtiene todos los costos ordenados por tipo y nombre"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, nombre, cantidad, tipo 
+                    FROM costos 
+                    ORDER BY tipo, nombre
+                """
+                )
+                rows = cursor.fetchall()
+                return [
+                    Costo(
+                        nombre=row[1],
+                        cantidad=row[2],
+                        tipo=TipoCosto(row[3]),
+                        id=row[0],
+                    )
+                    for row in rows
+                ]
+        except Exception as e:
+            print(f"Error en get_all: {e}")
+            return []
+
+    @staticmethod
+    def get_by_tipo(tipo: TipoCosto) -> List["Costo"]:
+        """Obtiene todos los costos de un tipo específico"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, nombre, cantidad, tipo 
+                    FROM costos 
+                    WHERE tipo = ? 
+                    ORDER BY nombre
+                """,
+                    (tipo.value,),
+                )
+                rows = cursor.fetchall()
+                return [
+                    Costo(
+                        nombre=row[1],
+                        cantidad=row[2],
+                        tipo=TipoCosto(row[3]),
+                        id=row[0],
+                    )
+                    for row in rows
+                ]
+        except Exception as e:
+            print(f"Error en get_by_tipo: {e}")
+            return []
+
+    @staticmethod
+    def get_total_por_tipo(tipo: TipoCosto) -> float:
+        """Obtiene la suma total de costos de un tipo específico"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT SUM(cantidad) 
+                    FROM costos 
+                    WHERE tipo = ?
+                """,
+                    (tipo.value,),
+                )
+                result = cursor.fetchone()
+                return result[0] if result[0] is not None else 0.0
+        except Exception as e:
+            print(f"Error en get_total_por_tipo: {e}")
+            return 0.0
+
+    @staticmethod
+    def get_total_general() -> float:
+        """Obtiene la suma total de todos los costos"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT SUM(cantidad) FROM costos")
+                result = cursor.fetchone()
+                return result[0] if result[0] is not None else 0.0
+        except Exception as e:
+            print(f"Error en get_total_general: {e}")
+            return 0.0
+
+    @staticmethod
+    def get_by_id(costo_id: int) -> Optional["Costo"]:
+        """Obtiene un costo por su ID"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, nombre, cantidad, tipo 
+                    FROM costos WHERE id = ?
+                """,
+                    (costo_id,),
+                )
+                row = cursor.fetchone()
+                if row:
+                    return Costo(
+                        nombre=row[1],
+                        cantidad=row[2],
+                        tipo=TipoCosto(row[3]),
+                        id=row[0],
+                    )
+                return None
+        except Exception as e:
+            print(f"Error en get_by_id: {e}")
+            return None
+
+    def save(self) -> bool:
+        """Guarda el costo en la base de datos"""
+        try:
+            # Validaciones básicas
+            if not self.nombre.strip():
+                raise Exception("El nombre del costo no puede estar vacío")
+
+            if self.cantidad <= 0:
+                raise Exception("La cantidad debe ser mayor a 0")
+
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                if self.id:  # Actualizar
+                    cursor.execute(
+                        """
+                        UPDATE costos 
+                        SET nombre = ?, cantidad = ?, tipo = ?
+                        WHERE id = ?
+                    """,
+                        (self.nombre.strip(), self.cantidad, self.tipo.value, self.id),
+                    )
+                else:  # Insertar
+                    cursor.execute(
+                        """
+                        INSERT INTO costos (nombre, cantidad, tipo) 
+                        VALUES (?, ?, ?)
+                    """,
+                        (self.nombre.strip(), self.cantidad, self.tipo.value),
+                    )
+                    self.id = cursor.lastrowid
+
+                conn.commit()
+                return True
+
+        except Exception as e:
+            raise Exception(f"Error al guardar costo: {str(e)}")
+
+    def delete(self) -> bool:
+        """Elimina el costo de la base de datos"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM costos WHERE id = ?", (self.id,))
+                conn.commit()
+                return True
+        except Exception as e:
+            raise Exception(f"Error al eliminar costo: {str(e)}")
+
+    def __str__(self) -> str:
+        return f"Costo(id={self.id}, nombre='{self.nombre}', cantidad={self.cantidad}, tipo={self.tipo.value})"
 
 
 # Instancia global de la base de datos

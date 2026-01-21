@@ -148,7 +148,7 @@ class MainWindow:
             # Botones de configuración
             configuraciones = [
                 ("Categorías", "config_categorias.py"),
-                ("Costos", None),  # Futuro módulo
+                ("Costos", "config_costos.py"),
                 ("Semanas", "config_semanas.py"),
             ]
 
