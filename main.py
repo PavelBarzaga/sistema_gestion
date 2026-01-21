@@ -61,10 +61,11 @@ class MainWindow:
         modulos = [
             ("Categorías", "categorias.py", True),
             ("Productos", "productos.py", True),
-            ("Clientes", None, False),
-            ("Proveedores", None, False),
-            ("Ventas", None, False),
-            ("Inventario", None, False),
+            ("Compras", "compras.py", True),
+            ("Registro de Venta Semanal", None, False),
+            ("Contabilidad", None, False),
+            ("Configurar Costos", None, False),
+            ("Margen Neto", None, False),
         ]
 
         # Crear botones

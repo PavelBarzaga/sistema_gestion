@@ -4,6 +4,7 @@ Configuración de la base de datos y modelos de la aplicación
 
 import sqlite3
 from pathlib import Path
+from datetime import datetime
 from typing import List, Optional
 
 
@@ -51,9 +52,31 @@ class Database:
             """
             )
 
+            # Tabla de compras
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS compras (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    producto_nombre TEXT NOT NULL,
+                    costo_total REAL NOT NULL,
+                    cantidad_elementos INTEGER NOT NULL,
+                    merma INTEGER NOT NULL DEFAULT 0,
+                    fecha_compra DATE NOT NULL,
+                    costo_unitario REAL GENERATED ALWAYS AS (costo_total / cantidad_elementos) VIRTUAL,
+                    perdidas REAL GENERATED ALWAYS AS ((costo_total / cantidad_elementos) * merma) VIRTUAL
+                )
+            """
+            )
+
             # Crear índices para mejorar el rendimiento
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_productos_categoria ON productos(categoria_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_compras_fecha ON compras(fecha_compra)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_compras_producto ON compras(producto_nombre)"
             )
 
             conn.commit()
@@ -425,6 +448,158 @@ class Producto:
 
     def __str__(self):
         return f"Producto(id={self.id}, nombre='{self.nombre}', categoria_id={self.categoria_id})"
+
+
+class Compra:
+    """Modelo para la tabla Compras"""
+
+    def __init__(
+        self,
+        producto_nombre,
+        costo_total,
+        cantidad_elementos,
+        merma=0,
+        fecha_compra=None,
+        id=None,
+    ):
+        self.id = id
+        self.producto_nombre = producto_nombre
+        self.costo_total = costo_total
+        self.cantidad_elementos = cantidad_elementos
+        self.merma = merma
+        self.fecha_compra = fecha_compra if fecha_compra else datetime.now().date()
+
+        # Calcular valores derivados
+        self.costo_unitario = (
+            costo_total / cantidad_elementos if cantidad_elementos > 0 else 0
+        )
+        self.perdidas = self.costo_unitario * merma
+
+    @staticmethod
+    def get_all():
+        """Obtiene todas las compras ordenadas por fecha descendente"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, producto_nombre, costo_total, cantidad_elementos, 
+                           merma, fecha_compra 
+                    FROM compras 
+                    ORDER BY fecha_compra DESC, id DESC
+                """
+                )
+                rows = cursor.fetchall()
+                return [
+                    Compra(
+                        producto_nombre=row[1],
+                        costo_total=row[2],
+                        cantidad_elementos=row[3],
+                        merma=row[4],
+                        fecha_compra=row[5],
+                        id=row[0],
+                    )
+                    for row in rows
+                ]
+        except Exception as e:
+            print(f"Error en get_all: {e}")
+            return []
+
+    @staticmethod
+    def get_by_id(compra_id):
+        """Obtiene una compra por su ID"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, producto_nombre, costo_total, cantidad_elementos, 
+                           merma, fecha_compra 
+                    FROM compras WHERE id = ?
+                """,
+                    (compra_id,),
+                )
+                row = cursor.fetchone()
+                if row:
+                    return Compra(
+                        producto_nombre=row[1],
+                        costo_total=row[2],
+                        cantidad_elementos=row[3],
+                        merma=row[4],
+                        fecha_compra=row[5],
+                        id=row[0],
+                    )
+                return None
+        except Exception as e:
+            print(f"Error en get_by_id: {e}")
+            return None
+
+    def save(self):
+        """Guarda la compra en la base de datos"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                if self.id:  # Actualizar
+                    cursor.execute(
+                        """
+                        UPDATE compras 
+                        SET producto_nombre = ?, costo_total = ?, cantidad_elementos = ?, 
+                            merma = ?, fecha_compra = ?
+                        WHERE id = ?
+                    """,
+                        (
+                            self.producto_nombre,
+                            self.costo_total,
+                            self.cantidad_elementos,
+                            self.merma,
+                            self.fecha_compra,
+                            self.id,
+                        ),
+                    )
+                else:  # Insertar
+                    cursor.execute(
+                        """
+                        INSERT INTO compras 
+                        (producto_nombre, costo_total, cantidad_elementos, merma, fecha_compra) 
+                        VALUES (?, ?, ?, ?, ?)
+                    """,
+                        (
+                            self.producto_nombre,
+                            self.costo_total,
+                            self.cantidad_elementos,
+                            self.merma,
+                            self.fecha_compra,
+                        ),
+                    )
+                    self.id = cursor.lastrowid
+                conn.commit()
+                return True
+        except Exception as e:
+            raise Exception(f"Error al guardar compra: {str(e)}")
+
+    def delete(self):
+        """Elimina la compra de la base de datos"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM compras WHERE id = ?", (self.id,))
+                conn.commit()
+                return True
+        except Exception as e:
+            raise Exception(f"Error al eliminar compra: {str(e)}")
+
+    def calcular_perdidas(self):
+        """Calcula las pérdidas basadas en la merma"""
+        if self.cantidad_elementos > 0:
+            self.costo_unitario = self.costo_total / self.cantidad_elementos
+            self.perdidas = self.costo_unitario * self.merma
+        else:
+            self.costo_unitario = 0
+            self.perdidas = 0
+        return self.perdidas
+
+    def __str__(self):
+        return f"Compra(id={self.id}, producto='{self.producto_nombre}', costo_total={self.costo_total})"
 
 
 # Instancia global de la base de datos
