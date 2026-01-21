@@ -4,8 +4,8 @@ Configuración de la base de datos y modelos de la aplicación
 
 import sqlite3
 from pathlib import Path
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime, date
+from typing import List, Optional, Tuple
 
 
 class Database:
@@ -68,6 +68,18 @@ class Database:
             """
             )
 
+            # Tabla de semanas
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS semanas (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    fecha_inicio DATE NOT NULL,
+                    fecha_fin DATE NOT NULL,
+                    UNIQUE(fecha_inicio, fecha_fin)
+                )
+            """
+            )
+
             # Crear índices para mejorar el rendimiento
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_productos_categoria ON productos(categoria_id)"
@@ -77,6 +89,12 @@ class Database:
             )
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_compras_producto ON compras(producto_nombre)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_semanas_inicio ON semanas(fecha_inicio)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_semanas_fin ON semanas(fecha_fin)"
             )
 
             conn.commit()
@@ -600,6 +618,220 @@ class Compra:
 
     def __str__(self):
         return f"Compra(id={self.id}, producto='{self.producto_nombre}', costo_total={self.costo_total})"
+
+
+class Semana:
+    """Modelo para la tabla Semanas"""
+
+    def __init__(self, fecha_inicio: date, fecha_fin: date, id: int = None):
+        self.id = id
+        self.fecha_inicio = fecha_inicio
+        self.fecha_fin = fecha_fin
+        self.numero = self.calcular_numero_semana()
+
+    @staticmethod
+    def calcular_numero_semana_para_fecha(fecha: date) -> int:
+        """Calcula el número de semana ISO para una fecha dada"""
+        return fecha.isocalendar()[1]
+
+    def calcular_numero_semana(self) -> int:
+        """Calcula el número de semana basado en la fecha de inicio"""
+        return self.calcular_numero_semana_para_fecha(self.fecha_inicio)
+
+    @staticmethod
+    def get_all() -> List["Semana"]:
+        """Obtiene todas las semanas ordenadas por fecha de inicio"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, fecha_inicio, fecha_fin 
+                    FROM semanas 
+                    ORDER BY fecha_inicio DESC
+                """
+                )
+                rows = cursor.fetchall()
+                return [
+                    Semana(
+                        fecha_inicio=datetime.strptime(row[1], "%Y-%m-%d").date(),
+                        fecha_fin=datetime.strptime(row[2], "%Y-%m-%d").date(),
+                        id=row[0],
+                    )
+                    for row in rows
+                ]
+        except Exception as e:
+            print(f"Error en get_all: {e}")
+            return []
+
+    @staticmethod
+    def get_by_id(semana_id: int) -> Optional["Semana"]:
+        """Obtiene una semana por su ID"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, fecha_inicio, fecha_fin 
+                    FROM semanas WHERE id = ?
+                """,
+                    (semana_id,),
+                )
+                row = cursor.fetchone()
+                if row:
+                    return Semana(
+                        fecha_inicio=datetime.strptime(row[1], "%Y-%m-%d").date(),
+                        fecha_fin=datetime.strptime(row[2], "%Y-%m-%d").date(),
+                        id=row[0],
+                    )
+                return None
+        except Exception as e:
+            print(f"Error en get_by_id: {e}")
+            return None
+
+    @staticmethod
+    def verificar_solapamiento(
+        fecha_inicio: date, fecha_fin: date, excluir_id: int = None
+    ) -> Tuple[bool, Optional["Semana"]]:
+        """
+        Verifica si hay solapamiento con semanas existentes
+
+        Returns:
+            Tuple[bool, Optional[Semana]]: (hay_solapamiento, semana_solapada)
+        """
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+
+                # Query para verificar solapamiento
+                if excluir_id:
+                    cursor.execute(
+                        """
+                        SELECT id, fecha_inicio, fecha_fin 
+                        FROM semanas 
+                        WHERE id != ? AND (
+                            (fecha_inicio <= ? AND fecha_fin >= ?) OR  -- Nueva semana dentro de existente
+                            (fecha_inicio >= ? AND fecha_inicio <= ?) OR  -- Inicio en rango existente
+                            (fecha_fin >= ? AND fecha_fin <= ?)  -- Fin en rango existente
+                        )
+                        LIMIT 1
+                    """,
+                        (
+                            excluir_id,
+                            fecha_fin,
+                            fecha_inicio,
+                            fecha_inicio,
+                            fecha_fin,
+                            fecha_inicio,
+                            fecha_fin,
+                        ),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT id, fecha_inicio, fecha_fin 
+                        FROM semanas 
+                        WHERE (
+                            (fecha_inicio <= ? AND fecha_fin >= ?) OR
+                            (fecha_inicio >= ? AND fecha_inicio <= ?) OR
+                            (fecha_fin >= ? AND fecha_fin <= ?)
+                        )
+                        LIMIT 1
+                    """,
+                        (
+                            fecha_fin,
+                            fecha_inicio,
+                            fecha_inicio,
+                            fecha_fin,
+                            fecha_inicio,
+                            fecha_fin,
+                        ),
+                    )
+
+                row = cursor.fetchone()
+                if row:
+                    semana_solapada = Semana(
+                        fecha_inicio=datetime.strptime(row[1], "%Y-%m-%d").date(),
+                        fecha_fin=datetime.strptime(row[2], "%Y-%m-%d").date(),
+                        id=row[0],
+                    )
+                    return True, semana_solapada
+                return False, None
+
+        except Exception as e:
+            print(f"Error en verificar_solapamiento: {e}")
+            return (
+                True,
+                None,
+            )  # Por seguridad, asumir que hay solapamiento en caso de error
+
+    def save(self) -> bool:
+        """Guarda la semana en la base de datos"""
+        try:
+            # Verificar que fecha_inicio <= fecha_fin
+            if self.fecha_inicio > self.fecha_fin:
+                raise Exception(
+                    "La fecha de inicio debe ser anterior o igual a la fecha de fin"
+                )
+
+            # Verificar solapamiento
+            hay_solapamiento, semana_solapada = self.verificar_solapamiento(
+                self.fecha_inicio, self.fecha_fin, self.id
+            )
+
+            if hay_solapamiento:
+                raise Exception(
+                    f"La semana se solapa con la semana existente: "
+                    f"{semana_solapada.fecha_inicio} - {semana_solapada.fecha_fin}"
+                )
+
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                if self.id:  # Actualizar (aunque no permitiremos editar normalmente)
+                    cursor.execute(
+                        """
+                        UPDATE semanas 
+                        SET fecha_inicio = ?, fecha_fin = ?
+                        WHERE id = ?
+                    """,
+                        (
+                            self.fecha_inicio.strftime("%Y-%m-%d"),
+                            self.fecha_fin.strftime("%Y-%m-%d"),
+                            self.id,
+                        ),
+                    )
+                else:  # Insertar
+                    cursor.execute(
+                        """
+                        INSERT INTO semanas (fecha_inicio, fecha_fin) 
+                        VALUES (?, ?)
+                    """,
+                        (
+                            self.fecha_inicio.strftime("%Y-%m-%d"),
+                            self.fecha_fin.strftime("%Y-%m-%d"),
+                        ),
+                    )
+                    self.id = cursor.lastrowid
+
+                conn.commit()
+                return True
+
+        except Exception as e:
+            raise Exception(f"Error al guardar semana: {str(e)}")
+
+    def delete(self) -> bool:
+        """Elimina la semana de la base de datos"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM semanas WHERE id = ?", (self.id,))
+                conn.commit()
+                return True
+        except Exception as e:
+            raise Exception(f"Error al eliminar semana: {str(e)}")
+
+    def __str__(self) -> str:
+        return f"Semana(id={self.id}, inicio={self.fecha_inicio}, fin={self.fecha_fin}, num={self.numero})"
 
 
 # Instancia global de la base de datos

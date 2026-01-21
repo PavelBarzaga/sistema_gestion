@@ -149,7 +149,7 @@ class MainWindow:
             configuraciones = [
                 ("Categorías", "config_categorias.py"),
                 ("Costos", None),  # Futuro módulo
-                ("Semanas", None),  # Futuro módulo
+                ("Semanas", "config_semanas.py"),
             ]
 
             for i, (nombre, archivo) in enumerate(configuraciones):
