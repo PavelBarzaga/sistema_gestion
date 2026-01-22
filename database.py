@@ -106,6 +106,30 @@ class Database:
                 )
             """
             )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS cuentas_cobrar (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre_persona TEXT NOT NULL,
+                    cantidad REAL NOT NULL,
+                    descripcion TEXT,
+                    fecha_creacion DATE NOT NULL
+                )
+            """
+            )
+
+            # Tabla de cuentas por pagar
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS cuentas_pagar (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre_proveedor TEXT NOT NULL,
+                    cantidad REAL NOT NULL,
+                    descripcion TEXT,
+                    fecha_creacion DATE NOT NULL
+                )
+            """
+            )
 
             # Crear índices para mejorar el rendimiento
             cursor.execute(
@@ -135,6 +159,18 @@ class Database:
             )
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_ventas_fecha_producto ON ventas(semana_id, producto_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_cobrar_nombre ON cuentas_cobrar(nombre_persona)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_pagar_nombre ON cuentas_pagar(nombre_proveedor)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_compras_fecha ON compras(fecha_compra)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_semanas_fechas ON semanas(fecha_inicio, fecha_fin)"
             )
 
             conn.commit()
@@ -1440,6 +1476,382 @@ class Venta:
         )
         producto_info = self.producto.nombre if self.producto else "N/A"
         return f"Venta(id={self.id}, semana={semana_info}, producto='{producto_info}', cantidad={self.cantidad_vendida}, monto={self.monto})"
+
+
+@dataclass
+class CuentaCobrar:
+    """Modelo para la tabla Cuentas por Cobrar"""
+
+    id: int = None
+    nombre_persona: str = ""
+    cantidad: float = 0.0
+    descripcion: str = ""
+    fecha_creacion: date = None
+
+    def __post_init__(self):
+        if self.fecha_creacion is None:
+            self.fecha_creacion = datetime.now().date()
+
+    @staticmethod
+    def get_all() -> List["CuentaCobrar"]:
+        """Obtiene todas las cuentas por cobrar"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, nombre_persona, cantidad, descripcion, fecha_creacion 
+                    FROM cuentas_cobrar 
+                    ORDER BY nombre_persona
+                """
+                )
+                rows = cursor.fetchall()
+                return [
+                    CuentaCobrar(
+                        id=row[0],
+                        nombre_persona=row[1],
+                        cantidad=row[2],
+                        descripcion=row[3],
+                        fecha_creacion=(
+                            datetime.strptime(row[4], "%Y-%m-%d").date()
+                            if row[4]
+                            else None
+                        ),
+                    )
+                    for row in rows
+                ]
+        except Exception as e:
+            print(f"Error en CuentaCobrar.get_all: {e}")
+            return []
+
+    @staticmethod
+    def get_total() -> float:
+        """Obtiene el total de cuentas por cobrar"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT SUM(cantidad) FROM cuentas_cobrar")
+                result = cursor.fetchone()
+                return result[0] if result[0] is not None else 0.0
+        except Exception as e:
+            print(f"Error en CuentaCobrar.get_total: {e}")
+            return 0.0
+
+    @staticmethod
+    def get_by_id(cuenta_id: int) -> Optional["CuentaCobrar"]:
+        """Obtiene una cuenta por cobrar por su ID"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, nombre_persona, cantidad, descripcion, fecha_creacion 
+                    FROM cuentas_cobrar WHERE id = ?
+                """,
+                    (cuenta_id,),
+                )
+                row = cursor.fetchone()
+                if row:
+                    return CuentaCobrar(
+                        id=row[0],
+                        nombre_persona=row[1],
+                        cantidad=row[2],
+                        descripcion=row[3],
+                        fecha_creacion=(
+                            datetime.strptime(row[4], "%Y-%m-%d").date()
+                            if row[4]
+                            else None
+                        ),
+                    )
+                return None
+        except Exception as e:
+            print(f"Error en CuentaCobrar.get_by_id: {e}")
+            return None
+
+    def save(self) -> bool:
+        """Guarda la cuenta por cobrar en la base de datos"""
+        try:
+            # Validaciones básicas
+            if not self.nombre_persona.strip():
+                raise Exception("El nombre de la persona es requerido")
+
+            if self.cantidad <= 0:
+                raise Exception("La cantidad debe ser mayor a 0")
+
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+
+                if self.id:  # Actualizar
+                    cursor.execute(
+                        """
+                        UPDATE cuentas_cobrar 
+                        SET nombre_persona = ?, cantidad = ?, descripcion = ?
+                        WHERE id = ?
+                    """,
+                        (
+                            self.nombre_persona.strip(),
+                            self.cantidad,
+                            self.descripcion.strip(),
+                            self.id,
+                        ),
+                    )
+                else:  # Insertar
+                    cursor.execute(
+                        """
+                        INSERT INTO cuentas_cobrar 
+                        (nombre_persona, cantidad, descripcion, fecha_creacion) 
+                        VALUES (?, ?, ?, ?)
+                    """,
+                        (
+                            self.nombre_persona.strip(),
+                            self.cantidad,
+                            self.descripcion.strip(),
+                            (
+                                self.fecha_creacion.strftime("%Y-%m-%d")
+                                if self.fecha_creacion
+                                else datetime.now().date().strftime("%Y-%m-%d")
+                            ),
+                        ),
+                    )
+                    self.id = cursor.lastrowid
+
+                conn.commit()
+                return True
+
+        except Exception as e:
+            raise Exception(f"Error al guardar cuenta por cobrar: {str(e)}")
+
+    def delete(self) -> bool:
+        """Elimina la cuenta por cobrar de la base de datos"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM cuentas_cobrar WHERE id = ?", (self.id,))
+                conn.commit()
+                return True
+        except Exception as e:
+            raise Exception(f"Error al eliminar cuenta por cobrar: {str(e)}")
+
+    def __str__(self) -> str:
+        return f"CuentaCobrar(id={self.id}, persona='{self.nombre_persona}', cantidad={self.cantidad})"
+
+
+@dataclass
+class CuentaPagar:
+    """Modelo para la tabla Cuentas por Pagar"""
+
+    id: int = None
+    nombre_proveedor: str = ""
+    cantidad: float = 0.0
+    descripcion: str = ""
+    fecha_creacion: date = None
+
+    def __post_init__(self):
+        if self.fecha_creacion is None:
+            self.fecha_creacion = datetime.now().date()
+
+    @staticmethod
+    def get_all() -> List["CuentaPagar"]:
+        """Obtiene todas las cuentas por pagar"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, nombre_proveedor, cantidad, descripcion, fecha_creacion 
+                    FROM cuentas_pagar 
+                    ORDER BY nombre_proveedor
+                """
+                )
+                rows = cursor.fetchall()
+                return [
+                    CuentaPagar(
+                        id=row[0],
+                        nombre_proveedor=row[1],
+                        cantidad=row[2],
+                        descripcion=row[3],
+                        fecha_creacion=(
+                            datetime.strptime(row[4], "%Y-%m-%d").date()
+                            if row[4]
+                            else None
+                        ),
+                    )
+                    for row in rows
+                ]
+        except Exception as e:
+            print(f"Error en CuentaPagar.get_all: {e}")
+            return []
+
+    @staticmethod
+    def get_total() -> float:
+        """Obtiene el total de cuentas por pagar"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT SUM(cantidad) FROM cuentas_pagar")
+                result = cursor.fetchone()
+                return result[0] if result[0] is not None else 0.0
+        except Exception as e:
+            print(f"Error en CuentaPagar.get_total: {e}")
+            return 0.0
+
+    @staticmethod
+    def get_by_id(cuenta_id: int) -> Optional["CuentaPagar"]:
+        """Obtiene una cuenta por pagar por su ID"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, nombre_proveedor, cantidad, descripcion, fecha_creacion 
+                    FROM cuentas_pagar WHERE id = ?
+                """,
+                    (cuenta_id,),
+                )
+                row = cursor.fetchone()
+                if row:
+                    return CuentaPagar(
+                        id=row[0],
+                        nombre_proveedor=row[1],
+                        cantidad=row[2],
+                        descripcion=row[3],
+                        fecha_creacion=(
+                            datetime.strptime(row[4], "%Y-%m-%d").date()
+                            if row[4]
+                            else None
+                        ),
+                    )
+                return None
+        except Exception as e:
+            print(f"Error en CuentaPagar.get_by_id: {e}")
+            return None
+
+    def save(self) -> bool:
+        """Guarda la cuenta por pagar en la base de datos"""
+        try:
+            # Validaciones básicas
+            if not self.nombre_proveedor.strip():
+                raise Exception("El nombre del proveedor es requerido")
+
+            if self.cantidad <= 0:
+                raise Exception("La cantidad debe ser mayor a 0")
+
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+
+                if self.id:  # Actualizar
+                    cursor.execute(
+                        """
+                        UPDATE cuentas_pagar 
+                        SET nombre_proveedor = ?, cantidad = ?, descripcion = ?
+                        WHERE id = ?
+                    """,
+                        (
+                            self.nombre_proveedor.strip(),
+                            self.cantidad,
+                            self.descripcion.strip(),
+                            self.id,
+                        ),
+                    )
+                else:  # Insertar
+                    cursor.execute(
+                        """
+                        INSERT INTO cuentas_pagar 
+                        (nombre_proveedor, cantidad, descripcion, fecha_creacion) 
+                        VALUES (?, ?, ?, ?)
+                    """,
+                        (
+                            self.nombre_proveedor.strip(),
+                            self.cantidad,
+                            self.descripcion.strip(),
+                            (
+                                self.fecha_creacion.strftime("%Y-%m-%d")
+                                if self.fecha_creacion
+                                else datetime.now().date().strftime("%Y-%m-%d")
+                            ),
+                        ),
+                    )
+                    self.id = cursor.lastrowid
+
+                conn.commit()
+                return True
+
+        except Exception as e:
+            raise Exception(f"Error al guardar cuenta por pagar: {str(e)}")
+
+    def delete(self) -> bool:
+        """Elimina la cuenta por pagar de la base de datos"""
+        try:
+            with Database().get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM cuentas_pagar WHERE id = ?", (self.id,))
+                conn.commit()
+                return True
+        except Exception as e:
+            raise Exception(f"Error al eliminar cuenta por pagar: {str(e)}")
+
+    def __str__(self) -> str:
+        return f"CuentaPagar(id={self.id}, proveedor='{self.nombre_proveedor}', cantidad={self.cantidad})"
+
+
+# Métodos para estadísticas
+def get_total_compras_rango(fecha_inicio: date, fecha_fin: date) -> float:
+    """Obtiene el total de compras en un rango de fechas"""
+    try:
+        with Database().get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT SUM(costo_total) 
+                FROM compras 
+                WHERE fecha_compra BETWEEN ? AND ?
+            """,
+                (fecha_inicio.strftime("%Y-%m-%d"), fecha_fin.strftime("%Y-%m-%d")),
+            )
+            result = cursor.fetchone()
+            return result[0] if result[0] is not None else 0.0
+    except Exception as e:
+        print(f"Error en get_total_compras_rango: {e}")
+        return 0.0
+
+
+def get_total_ventas_rango(fecha_inicio: date, fecha_fin: date) -> float:
+    """Obtiene el total de ventas en un rango de fechas (basado en semanas)"""
+    try:
+        with Database().get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Primero obtener las semanas que están dentro del rango
+            cursor.execute(
+                """
+                SELECT id FROM semanas 
+                WHERE fecha_inicio <= ? AND fecha_fin >= ?
+            """,
+                (fecha_fin.strftime("%Y-%m-%d"), fecha_inicio.strftime("%Y-%m-%d")),
+            )
+
+            semanas_ids = [row[0] for row in cursor.fetchall()]
+
+            if not semanas_ids:
+                return 0.0
+
+            # Luego obtener total de ventas de esas semanas
+            placeholders = ",".join("?" * len(semanas_ids))
+            cursor.execute(
+                f"""
+                SELECT SUM(monto) 
+                FROM ventas 
+                WHERE semana_id IN ({placeholders})
+            """,
+                semanas_ids,
+            )
+
+            result = cursor.fetchone()
+            return result[0] if result[0] is not None else 0.0
+
+    except Exception as e:
+        print(f"Error en get_total_ventas_rango: {e}")
+        return 0.0
 
 
 # Instancia global de la base de datos

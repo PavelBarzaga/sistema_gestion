@@ -64,7 +64,7 @@ class MainWindow:
             ("Productos", "productos.py", True, False),
             ("Compras", "compras.py", True, False),
             ("Ventas", "ventas.py", True, False),
-            ("Reportes", None, False, False),
+            ("Contabilidad", "contabilidad.py", True, False),
         ]
 
         # Crear botones principales
