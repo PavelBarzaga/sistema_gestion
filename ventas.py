@@ -201,7 +201,8 @@ class VentasWindow:
         if self.semanas:
             semanas_info = []
             for semana in self.semanas:
-                info = f"Semana {semana.numero}: {semana.fecha_inicio.strftime('%d/%m/%Y')} - {semana.fecha_fin.strftime('%d/%m/%Y')}"
+                # CAMBIO AQUÍ: Mostrar solo fechas, no "Semana X:"
+                info = f"{semana.fecha_inicio.strftime('%d/%m/%Y')} - {semana.fecha_fin.strftime('%d/%m/%Y')}"  # CAMBIADO
                 semanas_info.append((semana.id, info))
 
             self.semana_combo["values"] = [info for _, info in semanas_info]
@@ -215,7 +216,8 @@ class VentasWindow:
         if self.productos:
             productos_info = []
             for producto in self.productos:
-                info = f"{producto.nombre} (Stock: {producto.cantidad}, Precio: ${producto.precio_venta:.2f})"
+                # CAMBIO AQUÍ: Mostrar solo el nombre, no stock ni precio
+                info = f"{producto.nombre}"  # CAMBIADO: solo nombre
                 productos_info.append((producto.id, info))
 
             self.producto_combo["values"] = [info for _, info in productos_info]
@@ -239,7 +241,8 @@ class VentasWindow:
         try:
             selected_text = self.semana_combo.get()
             for semana in self.semanas:
-                info = f"Semana {semana.numero}: {semana.fecha_inicio.strftime('%d/%m/%Y')} - {semana.fecha_fin.strftime('%d/%m/%Y')}"
+                # CAMBIO AQUÍ: Coincidir con el nuevo formato
+                info = f"{semana.fecha_inicio.strftime('%d/%m/%Y')} - {semana.fecha_fin.strftime('%d/%m/%Y')}"  # CAMBIADO
                 if info == selected_text:
                     return semana.id
             return None
@@ -251,7 +254,8 @@ class VentasWindow:
         try:
             selected_text = self.producto_combo.get()
             for producto in self.productos:
-                info = f"{producto.nombre} (Stock: {producto.cantidad}, Precio: ${producto.precio_venta:.2f})"
+                # CAMBIO AQUÍ: Coincidir con el nuevo formato (solo nombre)
+                info = f"{producto.nombre}"  # CAMBIADO: solo nombre
                 if info == selected_text:
                     return producto.id
             return None
@@ -314,7 +318,8 @@ class VentasWindow:
                 producto = venta.producto
 
                 if semana and producto:
-                    semana_info = f"Semana {semana.numero}"
+                    # CAMBIO AQUÍ: Mostrar fechas en lugar de "Semana X"
+                    semana_info = f"{semana.fecha_inicio.strftime('%d/%m/%Y')} - {semana.fecha_fin.strftime('%d/%m/%Y')}"  # CAMBIADO
                     producto_info = producto.nombre
                     inventario_restante = producto.cantidad
 
@@ -323,7 +328,7 @@ class VentasWindow:
                         tk.END,
                         values=(
                             venta.id,
-                            semana_info,
+                            semana_info,  # Ahora muestra fechas
                             producto_info,
                             venta.cantidad_vendida,
                             f"${venta.monto:.2f}",

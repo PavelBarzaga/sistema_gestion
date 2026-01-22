@@ -179,7 +179,7 @@ class ConfigSemanasWindow:
         lista_frame.rowconfigure(0, weight=1)
 
         # Treeview (tabla) para mostrar semanas
-        columns = ("ID", "Semana", "Fecha Inicio", "Fecha Fin", "Días")
+        columns = ("Fecha Inicio", "Fecha Fin", "Días")
 
         self.tree = ttk.Treeview(
             lista_frame, columns=columns, show="headings", height=15
@@ -187,8 +187,6 @@ class ConfigSemanasWindow:
 
         # Configurar columnas
         column_configs = [
-            ("ID", 50, "center"),
-            ("Semana", 80, "center"),
             ("Fecha Inicio", 120, "center"),
             ("Fecha Fin", 120, "center"),
             ("Días", 80, "center"),
@@ -309,15 +307,16 @@ class ConfigSemanasWindow:
                 inicio_str = semana.fecha_inicio.strftime("%d/%m/%Y")
                 fin_str = semana.fecha_fin.strftime("%d/%m/%Y")
 
+                # CAMBIO AQUÍ: Solo mostrar fechas y días, no ID ni número
                 self.tree.insert(
                     "",
                     tk.END,
                     values=(
-                        semana.id,
-                        semana.numero,
-                        inicio_str,
-                        fin_str,
-                        f"{dias} días",
+                        # semana.id,  # REMOVIDO
+                        # semana.numero,  # REMOVIDO
+                        inicio_str,  # Ahora es columna 0
+                        fin_str,  # Ahora es columna 1
+                        f"{dias} días",  # Ahora es columna 2
                     ),
                 )
 

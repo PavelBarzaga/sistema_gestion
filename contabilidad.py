@@ -972,7 +972,8 @@ class ContabilidadWindow:
             if semanas:
                 semanas_info = []
                 for semana in semanas:
-                    info = f"Semana {semana.numero}: {semana.fecha_inicio.strftime('%d/%m/%Y')} - {semana.fecha_fin.strftime('%d/%m/%Y')}"
+                    # CAMBIO AQUÍ: Formato "Semana: DD/MM/YYYY - DD/MM/YYYY"
+                    info = f"Semana: {semana.fecha_inicio.strftime('%d/%m/%Y')} - {semana.fecha_fin.strftime('%d/%m/%Y')}"  # CAMBIADO
                     semanas_info.append((semana.id, info))
 
                 semanas_values = [info for _, info in semanas_info]
@@ -1007,7 +1008,8 @@ class ContabilidadWindow:
             semanas = Semana.get_all()
 
             for semana in semanas:
-                info = f"Semana {semana.numero}: {semana.fecha_inicio.strftime('%d/%m/%Y')} - {semana.fecha_fin.strftime('%d/%m/%Y')}"
+                # CAMBIO AQUÍ: Coincidir con el nuevo formato
+                info = f"Semana: {semana.fecha_inicio.strftime('%d/%m/%Y')} - {semana.fecha_fin.strftime('%d/%m/%Y')}"  # CAMBIADO
                 if info == combo_text:
                     return semana.id
             return None
