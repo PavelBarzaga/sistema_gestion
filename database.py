@@ -1854,5 +1854,130 @@ def get_total_ventas_rango(fecha_inicio: date, fecha_fin: date) -> float:
         return 0.0
 
 
+def get_margen_neto_semana(semana_id: int) -> dict:
+    """Calcula el margen neto para una semana específica"""
+    try:
+        with Database().get_connection() as conn:
+            cursor = conn.cursor()
+
+            # 1. Obtener ventas de la semana
+            cursor.execute(
+                """
+                SELECT SUM(monto) FROM ventas WHERE semana_id = ?
+            """,
+                (semana_id,),
+            )
+            total_ventas = cursor.fetchone()[0] or 0.0
+
+            # 2. Obtener costos fijos (se asumen mensuales, dividir entre 4.33 para semanales)
+            cursor.execute("SELECT SUM(cantidad) FROM costos WHERE tipo = 'fijo'")
+            total_costos_fijos_mensual = cursor.fetchone()[0] or 0.0
+            costos_fijos_semanales = (
+                total_costos_fijos_mensual / 4.33
+            )  # Promedio semanal
+
+            # 3. Obtener costos variables (se asumen proporcionales a ventas)
+            cursor.execute("SELECT SUM(cantidad) FROM costos WHERE tipo = 'variable'")
+            total_costos_variables = cursor.fetchone()[0] or 0.0
+
+            # 4. Calcular margen neto
+            # Asumiendo que costos variables son un porcentaje de ventas (ej: 30%)
+            porcentaje_costos_variables = 0.3  # Este porcentaje podría ser configurable
+            costos_variables_semanales = total_ventas * porcentaje_costos_variables
+
+            margen_neto = (
+                total_ventas - costos_fijos_semanales - costos_variables_semanales
+            )
+            porcentaje_margen = (
+                (margen_neto / total_ventas * 100) if total_ventas > 0 else 0
+            )
+
+            return {
+                "semana_id": semana_id,
+                "total_ventas": total_ventas,
+                "costos_fijos_semanales": costos_fijos_semanales,
+                "costos_variables_semanales": costos_variables_semanales,
+                "margen_neto": margen_neto,
+                "porcentaje_margen": porcentaje_margen,
+                "porcentaje_costos_variables": porcentaje_costos_variables * 100,
+            }
+
+    except Exception as e:
+        print(f"Error en get_margen_neto_semana: {e}")
+        return None
+
+
+def get_margen_neto_rango(semana_inicio_id: int, semana_fin_id: int) -> dict:
+    """Calcula el margen neto para un rango de semanas"""
+    try:
+        with Database().get_connection() as conn:
+            cursor = conn.cursor()
+
+            # 1. Obtener semanas en el rango
+            cursor.execute(
+                """
+                SELECT id FROM semanas 
+                WHERE id BETWEEN ? AND ?
+                ORDER BY fecha_inicio
+            """,
+                (semana_inicio_id, semana_fin_id),
+            )
+
+            semanas_ids = [row[0] for row in cursor.fetchall()]
+
+            if not semanas_ids:
+                return None
+
+            # 2. Obtener ventas totales del rango
+            placeholders = ",".join("?" * len(semanas_ids))
+            cursor.execute(
+                f"""
+                SELECT SUM(monto) FROM ventas 
+                WHERE semana_id IN ({placeholders})
+            """,
+                semanas_ids,
+            )
+            total_ventas = cursor.fetchone()[0] or 0.0
+
+            # 3. Obtener costos fijos (para todo el período)
+            cursor.execute("SELECT SUM(cantidad) FROM costos WHERE tipo = 'fijo'")
+            total_costos_fijos_mensual = cursor.fetchone()[0] or 0.0
+
+            # Calcular número de semanas en el rango
+            num_semanas = len(semanas_ids)
+            costos_fijos_totales = (total_costos_fijos_mensual / 4.33) * num_semanas
+
+            # 4. Costos variables (proporcionales a ventas)
+            cursor.execute("SELECT SUM(cantidad) FROM costos WHERE tipo = 'variable'")
+            total_costos_variables = cursor.fetchone()[0] or 0.0
+
+            # Asumiendo relación proporcional (esto debería ser configurable)
+            porcentaje_costos_variables = 0.3  # 30% de las ventas
+            costos_variables_totales = total_ventas * porcentaje_costos_variables
+
+            # 5. Calcular margen neto
+            margen_neto = total_ventas - costos_fijos_totales - costos_variables_totales
+            porcentaje_margen = (
+                (margen_neto / total_ventas * 100) if total_ventas > 0 else 0
+            )
+
+            return {
+                "semana_inicio_id": semana_inicio_id,
+                "semana_fin_id": semana_fin_id,
+                "num_semanas": num_semanas,
+                "total_ventas": total_ventas,
+                "costos_fijos_totales": costos_fijos_totales,
+                "costos_variables_totales": costos_variables_totales,
+                "margen_neto": margen_neto,
+                "porcentaje_margen": porcentaje_margen,
+                "porcentaje_costos_variables": porcentaje_costos_variables * 100,
+                "semanas_ids": semanas_ids,
+            }
+
+    except Exception as e:
+        print(f"Error en get_margen_neto_rango: {e}")
+        return None
+
+
 # Instancia global de la base de datos
 db = Database()

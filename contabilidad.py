@@ -421,6 +421,154 @@ class ContabilidadWindow:
         )
         nota_label.pack(pady=10)
 
+        # ========== PESTAÑA 3: MARGEN NETO ==========
+        margen_frame = ttk.Frame(self.notebook, padding="20")
+        self.notebook.add(margen_frame, text="Margen Neto")
+
+        margen_frame.columnconfigure(0, weight=1)
+        margen_frame.rowconfigure(2, weight=1)
+
+        # ===== SELECTOR DE SEMANAS =====
+        selector_frame = ttk.LabelFrame(
+            margen_frame, text="Seleccionar Período", padding="15"
+        )
+        selector_frame.grid(row=0, column=0, pady=(0, 20), sticky=(tk.W, tk.E))
+
+        # Radio buttons para tipo de período
+        self.tipo_periodo_var = tk.StringVar(value="semana")
+
+        ttk.Radiobutton(
+            selector_frame,
+            text="Una Semana",
+            variable=self.tipo_periodo_var,
+            value="semana",
+            command=self.cambiar_tipo_periodo,
+        ).grid(row=0, column=0, padx=20, pady=5, sticky=tk.W)
+
+        ttk.Radiobutton(
+            selector_frame,
+            text="Rango de Semanas",
+            variable=self.tipo_periodo_var,
+            value="rango",
+            command=self.cambiar_tipo_periodo,
+        ).grid(row=0, column=1, padx=20, pady=5, sticky=tk.W)
+
+        # Frame para selección de semana única
+        self.semana_unica_frame = ttk.Frame(selector_frame)
+        self.semana_unica_frame.grid(
+            row=1, column=0, columnspan=2, pady=10, sticky=(tk.W, tk.E)
+        )
+
+        ttk.Label(self.semana_unica_frame, text="Seleccionar Semana:").pack(
+            side=tk.LEFT, padx=(0, 10)
+        )
+        self.semana_unica_combo = ttk.Combobox(
+            self.semana_unica_frame, state="readonly", width=40
+        )
+        self.semana_unica_combo.pack(side=tk.LEFT)
+
+        # Frame para rango de semanas (inicialmente oculto)
+        self.rango_semanas_frame = ttk.Frame(selector_frame)
+        self.rango_semanas_frame.grid(
+            row=1, column=0, columnspan=2, pady=10, sticky=(tk.W, tk.E)
+        )
+        self.rango_semanas_frame.grid_remove()  # Oculto inicialmente
+
+        ttk.Label(self.rango_semanas_frame, text="Semana Inicio:").pack(
+            side=tk.LEFT, padx=(0, 10)
+        )
+        self.semana_inicio_combo = ttk.Combobox(
+            self.rango_semanas_frame, state="readonly", width=30
+        )
+        self.semana_inicio_combo.pack(side=tk.LEFT, padx=(0, 20))
+
+        ttk.Label(self.rango_semanas_frame, text="Semana Fin:").pack(
+            side=tk.LEFT, padx=(0, 10)
+        )
+        self.semana_fin_combo = ttk.Combobox(
+            self.rango_semanas_frame, state="readonly", width=30
+        )
+        self.semana_fin_combo.pack(side=tk.LEFT)
+
+        # Botón para calcular
+        ttk.Button(
+            selector_frame,
+            text="Calcular Margen Neto",
+            command=self.calcular_margen_neto,
+        ).grid(row=2, column=0, columnspan=2, pady=(15, 0))
+
+        # ===== RESULTADOS =====
+        resultados_frame = ttk.LabelFrame(
+            margen_frame, text="Resultados del Margen Neto", padding="20"
+        )
+        resultados_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        resultados_frame.columnconfigure(0, weight=1)
+
+        # Etiquetas para resultados
+        self.ventas_label = ttk.Label(
+            resultados_frame, text="Total Ventas: $0.00", font=("Arial", 11)
+        )
+        self.ventas_label.pack(pady=5)
+
+        self.costos_fijos_label = ttk.Label(
+            resultados_frame, text="Costos Fijos (asignados): $0.00", font=("Arial", 11)
+        )
+        self.costos_fijos_label.pack(pady=5)
+
+        self.costos_variables_label = ttk.Label(
+            resultados_frame,
+            text="Costos Variables (estimados): $0.00",
+            font=("Arial", 11),
+        )
+        self.costos_variables_label.pack(pady=5)
+
+        self.margen_neto_label = ttk.Label(
+            resultados_frame, text="Margen Neto: $0.00", font=("Arial", 14, "bold")
+        )
+        self.margen_neto_label.pack(pady=15)
+
+        self.porcentaje_margen_label = ttk.Label(
+            resultados_frame, text="Porcentaje de Margen: 0.0%", font=("Arial", 12)
+        )
+        self.porcentaje_margen_label.pack(pady=5)
+
+        # Línea separadora
+        ttk.Separator(resultados_frame, orient="horizontal").pack(fill=tk.X, pady=20)
+
+        # Configuración de porcentaje de costos variables
+        config_frame = ttk.Frame(resultados_frame)
+        config_frame.pack(pady=10)
+
+        ttk.Label(config_frame, text="Porcentaje Costos Variables:").pack(
+            side=tk.LEFT, padx=(0, 10)
+        )
+        self.porcentaje_var = tk.StringVar(value="30")
+        self.porcentaje_spinbox = ttk.Spinbox(
+            config_frame, from_=0, to=100, textvariable=self.porcentaje_var, width=5
+        )
+        self.porcentaje_spinbox.pack(side=tk.LEFT)
+        ttk.Label(config_frame, text="%").pack(side=tk.LEFT, padx=(5, 10))
+
+        ttk.Button(
+            config_frame,
+            text="Actualizar Cálculo",
+            command=self.actualizar_porcentaje_costos,
+        ).pack(side=tk.LEFT)
+
+        # Nota informativa
+        nota_label = ttk.Label(
+            resultados_frame,
+            text="Nota: Los costos fijos se distribuyen semanalmente (mes/4.33). "
+            "Los costos variables se estiman como porcentaje de las ventas.",
+            font=("Arial", 9),
+            wraplength=600,
+            justify=tk.LEFT,
+        )
+        nota_label.pack(pady=10)
+
+        # Cargar semanas en los comboboxes
+        self.cargar_semanas_comboboxes()
+
         # ===== BOTÓN CERRAR =====
         close_frame = ttk.Frame(main_frame)
         close_frame.grid(row=1, column=0, pady=(10, 0))
@@ -811,6 +959,170 @@ class ContabilidadWindow:
             messagebox.showerror(
                 "Error", f"No se pudieron calcular las estadísticas: {str(e)}"
             )
+
+    # ========== MÉTODOS ADICIONALES ==========
+
+    def cargar_semanas_comboboxes(self):
+        """Carga las semanas en los comboboxes del margen neto"""
+        try:
+            from database import Semana
+
+            semanas = Semana.get_all()
+
+            if semanas:
+                semanas_info = []
+                for semana in semanas:
+                    info = f"Semana {semana.numero}: {semana.fecha_inicio.strftime('%d/%m/%Y')} - {semana.fecha_fin.strftime('%d/%m/%Y')}"
+                    semanas_info.append((semana.id, info))
+
+                semanas_values = [info for _, info in semanas_info]
+
+                # Cargar en ambos comboboxes
+                self.semana_unica_combo["values"] = semanas_values
+                self.semana_inicio_combo["values"] = semanas_values
+                self.semana_fin_combo["values"] = semanas_values
+
+                if semanas_values:
+                    self.semana_unica_combo.current(0)
+                    self.semana_inicio_combo.current(0)
+                    self.semana_fin_combo.current(min(1, len(semanas_values) - 1))
+
+        except Exception as e:
+            print(f"Error al cargar semanas: {e}")
+
+    def cambiar_tipo_periodo(self):
+        """Cambia entre semana única y rango de semanas"""
+        if self.tipo_periodo_var.get() == "semana":
+            self.semana_unica_frame.grid()
+            self.rango_semanas_frame.grid_remove()
+        else:
+            self.semana_unica_frame.grid_remove()
+            self.rango_semanas_frame.grid()
+
+    def get_semana_id_from_combo_text(self, combo_text):
+        """Obtiene el ID de semana desde el texto del combobox"""
+        try:
+            from database import Semana
+
+            semanas = Semana.get_all()
+
+            for semana in semanas:
+                info = f"Semana {semana.numero}: {semana.fecha_inicio.strftime('%d/%m/%Y')} - {semana.fecha_fin.strftime('%d/%m/%Y')}"
+                if info == combo_text:
+                    return semana.id
+            return None
+        except:
+            return None
+
+    def calcular_margen_neto(self):
+        """Calcula el margen neto según la selección"""
+        try:
+            from database import get_margen_neto_semana, get_margen_neto_rango
+
+            if self.tipo_periodo_var.get() == "semana":
+                # Una semana
+                semana_text = self.semana_unica_combo.get()
+                semana_id = self.get_semana_id_from_combo_text(semana_text)
+
+                if not semana_id:
+                    messagebox.showwarning(
+                        "Advertencia", "Seleccione una semana válida"
+                    )
+                    return
+
+                resultado = get_margen_neto_semana(semana_id)
+
+                if resultado:
+                    self.mostrar_resultados_margen(resultado)
+                else:
+                    messagebox.showwarning(
+                        "Información", "No hay datos para calcular el margen neto"
+                    )
+
+            else:
+                # Rango de semanas
+                inicio_text = self.semana_inicio_combo.get()
+                fin_text = self.semana_fin_combo.get()
+
+                semana_inicio_id = self.get_semana_id_from_combo_text(inicio_text)
+                semana_fin_id = self.get_semana_id_from_combo_text(fin_text)
+
+                if not semana_inicio_id or not semana_fin_id:
+                    messagebox.showwarning("Advertencia", "Seleccione semanas válidas")
+                    return
+
+                if semana_inicio_id > semana_fin_id:
+                    messagebox.showwarning(
+                        "Advertencia",
+                        "La semana inicio debe ser anterior a la semana fin",
+                    )
+                    return
+
+                resultado = get_margen_neto_rango(semana_inicio_id, semana_fin_id)
+
+                if resultado:
+                    self.mostrar_resultados_margen(resultado)
+                else:
+                    messagebox.showwarning(
+                        "Información", "No hay datos para calcular el margen neto"
+                    )
+
+        except Exception as e:
+            messagebox.showerror(
+                "Error", f"No se pudo calcular el margen neto: {str(e)}"
+            )
+
+    def mostrar_resultados_margen(self, resultado):
+        """Muestra los resultados del cálculo de margen neto"""
+        try:
+            # Actualizar etiquetas
+            self.ventas_label.config(
+                text=f"Total Ventas: ${resultado['total_ventas']:.2f}"
+            )
+
+            if "costos_fijos_semanales" in resultado:
+                # Una semana
+                self.costos_fijos_label.config(
+                    text=f"Costos Fijos (asignados semanales): ${resultado['costos_fijos_semanales']:.2f}"
+                )
+                self.costos_variables_label.config(
+                    text=f"Costos Variables (estimados): ${resultado['costos_variables_semanales']:.2f}"
+                )
+            else:
+                # Rango de semanas
+                self.costos_fijos_label.config(
+                    text=f"Costos Fijos (asignados para {resultado['num_semanas']} semanas): ${resultado['costos_fijos_totales']:.2f}"
+                )
+                self.costos_variables_label.config(
+                    text=f"Costos Variables (estimados): ${resultado['costos_variables_totales']:.2f}"
+                )
+
+            # Determinar color del margen neto
+            margen_color = "green" if resultado["margen_neto"] >= 0 else "red"
+            self.margen_neto_label.config(
+                text=f"Margen Neto: ${resultado['margen_neto']:.2f}",
+                foreground=margen_color,
+            )
+
+            self.porcentaje_margen_label.config(
+                text=f"Porcentaje de Margen: {resultado['porcentaje_margen']:.1f}%"
+            )
+
+            # Actualizar spinbox con el porcentaje usado
+            self.porcentaje_var.set(str(resultado["porcentaje_costos_variables"]))
+
+        except Exception as e:
+            print(f"Error al mostrar resultados: {e}")
+
+    def actualizar_porcentaje_costos(self):
+        """Actualiza el cálculo con nuevo porcentaje de costos variables"""
+        # Aquí podrías implementar la actualización del porcentaje
+        # y recalcular el margen neto
+        messagebox.showinfo(
+            "Configuración",
+            "Para cambiar el porcentaje permanentemente, "
+            "se necesita modificar la configuración del sistema.",
+        )
 
 
 def main():
