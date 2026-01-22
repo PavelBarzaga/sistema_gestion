@@ -410,11 +410,11 @@ class ContabilidadWindow:
         # Línea separadora
         ttk.Separator(resultados_frame, orient="horizontal").pack(fill=tk.X, pady=20)
 
-        # Nota informativa
+        # Nota informativa - ACTUALIZAR
         nota_label = ttk.Label(
             resultados_frame,
-            text="Nota: Las ventas se calculan basándose en las semanas que "
-            "caen dentro del rango de fechas seleccionado.",
+            text="Nota: Los costos fijos se distribuyen semanalmente (mes/4.33). "
+            "Los costos variables son la suma total registrada en Configurar Costos.",
             font=("Arial", 9),
             wraplength=600,
             justify=tk.LEFT,
@@ -536,24 +536,24 @@ class ContabilidadWindow:
         ttk.Separator(resultados_frame, orient="horizontal").pack(fill=tk.X, pady=20)
 
         # Configuración de porcentaje de costos variables
-        config_frame = ttk.Frame(resultados_frame)
-        config_frame.pack(pady=10)
+        # config_frame = ttk.Frame(resultados_frame)
+        # config_frame.pack(pady=10)
 
-        ttk.Label(config_frame, text="Porcentaje Costos Variables:").pack(
-            side=tk.LEFT, padx=(0, 10)
-        )
-        self.porcentaje_var = tk.StringVar(value="30")
-        self.porcentaje_spinbox = ttk.Spinbox(
-            config_frame, from_=0, to=100, textvariable=self.porcentaje_var, width=5
-        )
-        self.porcentaje_spinbox.pack(side=tk.LEFT)
-        ttk.Label(config_frame, text="%").pack(side=tk.LEFT, padx=(5, 10))
+        # ttk.Label(config_frame, text="Porcentaje Costos Variables:").pack(
+        #     side=tk.LEFT, padx=(0, 10)
+        # )
+        # self.porcentaje_var = tk.StringVar(value="30")
+        # self.porcentaje_spinbox = ttk.Spinbox(
+        #     config_frame, from_=0, to=100, textvariable=self.porcentaje_var, width=5
+        # )
+        # self.porcentaje_spinbox.pack(side=tk.LEFT)
+        # ttk.Label(config_frame, text="%").pack(side=tk.LEFT, padx=(5, 10))
 
-        ttk.Button(
-            config_frame,
-            text="Actualizar Cálculo",
-            command=self.actualizar_porcentaje_costos,
-        ).pack(side=tk.LEFT)
+        # ttk.Button(
+        #     config_frame,
+        #     text="Actualizar Cálculo",
+        #     command=self.actualizar_porcentaje_costos,
+        # ).pack(side=tk.LEFT)
 
         # Nota informativa
         nota_label = ttk.Label(
@@ -1088,7 +1088,8 @@ class ContabilidadWindow:
                     text=f"Costos Fijos (asignados semanales): ${resultado['costos_fijos_semanales']:.2f}"
                 )
                 self.costos_variables_label.config(
-                    text=f"Costos Variables (estimados): ${resultado['costos_variables_semanales']:.2f}"
+                    # CAMBIADO: Mostrar valor absoluto, no porcentaje
+                    text=f"Costos Variables (totales): ${resultado['costos_variables']:.2f}"
                 )
             else:
                 # Rango de semanas
@@ -1096,7 +1097,8 @@ class ContabilidadWindow:
                     text=f"Costos Fijos (asignados para {resultado['num_semanas']} semanas): ${resultado['costos_fijos_totales']:.2f}"
                 )
                 self.costos_variables_label.config(
-                    text=f"Costos Variables (estimados): ${resultado['costos_variables_totales']:.2f}"
+                    # CAMBIADO: Mostrar valor absoluto, no porcentaje
+                    text=f"Costos Variables (totales): ${resultado['costos_variables']:.2f}"
                 )
 
             # Determinar color del margen neto
@@ -1107,24 +1109,17 @@ class ContabilidadWindow:
             )
 
             self.porcentaje_margen_label.config(
-                text=f"Porcentaje de Margen: {resultado['porcentaje_margen']:.1f}%"
+                text=f"Porcentaje de Margen sobre Ventas: {resultado['porcentaje_margen']:.1f}%"
             )
 
-            # Actualizar spinbox con el porcentaje usado
-            self.porcentaje_var.set(str(resultado["porcentaje_costos_variables"]))
+            # # CAMBIADO: Eliminar o esconder la sección de configuración de porcentaje
+            # self.porcentaje_var.set("")  # Limpiar
+            # # Ocultar el frame de configuración si existe
+            # if hasattr(self, "config_frame"):
+            #     self.config_frame.pack_forget()
 
         except Exception as e:
             print(f"Error al mostrar resultados: {e}")
-
-    def actualizar_porcentaje_costos(self):
-        """Actualiza el cálculo con nuevo porcentaje de costos variables"""
-        # Aquí podrías implementar la actualización del porcentaje
-        # y recalcular el margen neto
-        messagebox.showinfo(
-            "Configuración",
-            "Para cambiar el porcentaje permanentemente, "
-            "se necesita modificar la configuración del sistema.",
-        )
 
 
 def main():
